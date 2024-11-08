@@ -12,19 +12,92 @@ import Button from './ui/Button';
 import Select from './ui/Select';
 import Card from './ui/Card';
 import Modal from './ui/Modal';
-import Tooltip from './ui/Tooltip'; // Optional
+import Tooltip from './ui/Tooltip';
+import InfoIcon from './ui/InfoIcon';
 
 const CourseForm = () => {
-  // Define fixed methods
+  // Department options with labels and values
+  const departmentOptions = [
+    { label: 'Applied Mechanics', value: 'AP' },
+    { label: 'Applied Research in Electronics', value: 'CR' },
+    { label: 'Artificial Intelligence', value: 'AI' },
+    { label: 'Atmospheric Sciences', value: 'AS' },
+    { label: 'Automotive Research and Tribology', value: 'IT' },
+    { label: 'Biochemical Engineering and Biotechnology', value: 'BB' },
+    { label: 'Biological Sciences', value: 'SB' },
+    { label: 'Biomedical Engineering', value: 'BM' },
+    { label: 'Chemical Engineering', value: 'CL' },
+    { label: 'Chemistry', value: 'CM' },
+    { label: 'Civil Engineering', value: 'CV' },
+    { label: 'Computer Science and Engineering', value: 'CO' },
+    { label: 'Design', value: 'DD' },
+    { label: 'Electrical Engineering', value: 'EL' },
+    { label: 'Energy Science and Engineering', value: 'XX' },
+    { label: 'Humanities and Social Sciences', value: 'HU/HS' },
+    { label: 'Information Technology, Amar Nath and Shashi Khosla', value: 'SI' },
+    { label: 'Interdisciplinary Research', value: '-' },
+    { label: 'Management Studies', value: 'MS/MD' },
+    { label: 'Materials Science and Engineering', value: 'MS' },
+    { label: 'Mathematics', value: 'MT' },
+    { label: 'Mechanical Engineering', value: 'MC' },
+    { label: 'Optics and Photonics', value: 'OP' },
+    { label: 'Physics', value: 'PY' },
+    { label: 'Public Policy', value: 'SP' },
+    { label: 'Rural Development and Technology', value: 'RD' },
+    { label: 'Sensors, Instrumentation and Cyber-Physical Systems Engineering', value: 'DS' },
+    { label: 'Telecommunication Technology and Management', value: 'BS' },
+    { label: 'Textile and Fibre Engineering', value: 'TX' },
+    { label: 'Transportation Research and Injury Prevention', value: 'TR' },
+    { label: 'Value Education in Engineering', value: 'VE' },
+    { label: 'National Resource', value: 'NR' },
+  ];
+
+  // Nature of course options
+  const natureOfCourseOptions = [
+    { label: 'Project based course (e.g. Major, Minor, Mini Projects)', value: 'D' },
+    { label: 'Lecture course', value: 'L' },
+    { label: 'N Non-graded core component', value: 'N' },
+    { label: 'Practical/Practice based course', value: 'P' },
+    { label: 'Seminar Courses', value: 'Q' },
+    { label: 'Professional Practices', value: 'R' },
+    { label: 'Independent Study', value: 'S' },
+    { label: 'Practical Training', value: 'T' },
+    { label: 'Lecture Courses on Special Topics (1 or 2 credits)', value: 'V' },
+  ];
+  const courseTypeOptions = [
+    { label: 'Core', value: 'Core' },
+    { label: 'Elective', value: 'Elective' },
+  ];
+
+  // Fixed course delivery methods
   const fixedMethods = [
     { name: 'Lecture' },
     { name: 'Computer Simulations/Labs' },
     { name: 'Project-Based Learning' },
     { name: 'Practical/Labs' },
   ];
-
-  const { register, control, handleSubmit, reset, formState: { errors } } = useForm({
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm({
     defaultValues: {
+      courseName: '',
+      courseType: '', // Added default value for courseType
+      department: '',
+      natureOfCourse: '',
+      levelOfCourse: '',
+      courseCode: '',
+      hoursTotal: '',
+      creditStructure: {
+        lecture: '',
+        tutorial: '',
+        lab: '',
+      },
       preRequisites: [''],
       clOs: [{ clo: 'CLO1', description: '', plo: [] }],
       assessments: [
@@ -51,7 +124,7 @@ const CourseForm = () => {
         },
       ],
       // Initialize courseDeliveryMethodologies with fixed methods
-      courseDeliveryMethodologies: fixedMethods.map(method => ({
+      courseDeliveryMethodologies: fixedMethods.map((method) => ({
         method: method.name,
         percentage: '',
       })),
@@ -63,13 +136,12 @@ const CourseForm = () => {
     },
   });
 
-  // Field Arrays for "Others" methods
+  // Field Arrays for dynamic fields
   const { fields: othersFields, append: appendOther, remove: removeOther } = useFieldArray({
     control,
     name: 'others',
   });
 
-  // Other Field Arrays
   const { fields: preReqFields, append: appendPreReq, remove: removePreReq } = useFieldArray({
     control,
     name: 'preRequisites',
@@ -80,17 +152,22 @@ const CourseForm = () => {
     name: 'clOs',
   });
 
-  const { fields: assessmentFields, append: appendAssessment, remove: removeAssessment } = useFieldArray({
-    control,
-    name: 'assessments',
-  });
+  const { fields: assessmentFields, append: appendAssessment, remove: removeAssessment } =
+    useFieldArray({
+      control,
+      name: 'assessments',
+    });
 
   const { fields: ccdpFields, append: appendCcdp, remove: removeCcdp } = useFieldArray({
     control,
     name: 'ccdp',
   });
 
-  const { fields: teachingMethodFields, append: appendTeachingMethod, remove: removeTeachingMethod } = useFieldArray({
+  const {
+    fields: teachingMethodFields,
+    append: appendTeachingMethod,
+    remove: removeTeachingMethod,
+  } = useFieldArray({
     control,
     name: 'teachingAndLearningMethods',
   });
@@ -100,19 +177,44 @@ const CourseForm = () => {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Watch fields to generate course code
+  const department = watch('department');
+  const natureOfCourse = watch('natureOfCourse');
+  const levelOfCourse = watch('levelOfCourse');
+
+  useEffect(() => {
+    if (department && natureOfCourse && levelOfCourse) {
+      const departmentCode = department;
+      const natureCode = natureOfCourse;
+      const levelDigit = levelOfCourse.toString().charAt(0); // Get the hundreds digit
+
+      const fetchUniqueCode = async () => {
+        try {
+          const res = await axios.get('/api/courses/count', {
+            params: { departmentCode, natureCode, levelDigit },
+          });
+          const count = res.data.count || 0;
+          const uniqueNum = (count + 1).toString().padStart(2, '0'); // Increment count
+          const courseCode = `${departmentCode}${natureCode}${levelDigit}${uniqueNum}`;
+          setValue('courseCode', courseCode);
+        } catch (error) {
+          console.error('Error fetching course count:', error);
+          setError('Failed to generate course code');
+        }
+      };
+
+      fetchUniqueCode();
+    } else {
+      setValue('courseCode', '');
+    }
+  }, [department, natureOfCourse, levelOfCourse, setValue]);
+
   useEffect(() => {
     if (success) {
       const timer = setTimeout(() => setSuccess(''), 5000); // Clears after 5 seconds
       return () => clearTimeout(timer);
     }
   }, [success]);
-
-  // Debugging: Log pdfData whenever it changes
-  useEffect(() => {
-    if (pdfData) {
-      console.log('PDF Data for Generation:', pdfData);
-    }
-  }, [pdfData]);
 
   const onSubmit = async (data) => {
     console.log('Form Submitted:', data);
@@ -128,27 +230,27 @@ const CourseForm = () => {
       }
 
       // Consolidate fixed and others methodologies
-      const fixedMethodologies = data.courseDeliveryMethodologies.map(item => ({
+      const fixedMethodologies = data.courseDeliveryMethodologies.map((item) => ({
         method: item.method, // Fixed method name
         percentage: parseFloat(item.percentage),
       }));
 
-      const othersMethodologies = data.others.map(item => ({
+      const othersMethodologies = data.others.map((item) => ({
         method: item.method,
         percentage: parseFloat(item.percentage),
       }));
 
-      const courseDeliveryMethodologies = [
-        ...fixedMethodologies,
-        ...othersMethodologies,
-      ];
+      const courseDeliveryMethodologies = [...fixedMethodologies, ...othersMethodologies];
 
       // Transform courseResources into an array if it's a string
       let courseResources = [];
       if (typeof data.courseResources === 'string') {
-        courseResources = data.courseResources.split('\n').map(item => item.trim()).filter(item => item);
+        courseResources = data.courseResources
+          .split('\n')
+          .map((item) => item.trim())
+          .filter((item) => item);
       } else if (Array.isArray(data.courseResources)) {
-        courseResources = data.courseResources.map(item => item.trim()).filter(item => item);
+        courseResources = data.courseResources.map((item) => item.trim()).filter((item) => item);
       }
 
       // Prepare the payload
@@ -168,13 +270,11 @@ const CourseForm = () => {
 
       // Set the PDF data from the API response
       setPdfData(res.data.data); // Assuming API returns the saved course data
-      console.log('PDF Data set to:', res.data.data); // Debugging Line
 
       setSuccess('Course submitted successfully!');
-      
+
       // Reset the form after setting pdfData
       reset(); // Reset the form fields
-
     } catch (err) {
       console.error('Submission Error:', err);
       if (err.response && err.response.data) {
@@ -199,16 +299,12 @@ const CourseForm = () => {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {/* Display success message */}
           {success && (
-            <div className="mb-4 p-4 bg-green-100 text-green-700 rounded">
-              {success}
-            </div>
+            <div className="mb-4 p-4 bg-green-100 text-green-700 rounded">{success}</div>
           )}
 
           {/* Display error message */}
           {error && (
-            <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">
-              {error}
-            </div>
+            <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">{error}</div>
           )}
 
           {/* Display validation errors */}
@@ -229,16 +325,6 @@ const CourseForm = () => {
           <div>
             <h2 className="text-2xl font-semibold mb-4">Course Specification</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Course Code */}
-              <div>
-                <label className="block mb-1 font-medium">Course Code</label>
-                <Input
-                  {...register('courseCode', { required: 'Course Code is required' })}
-                  placeholder="Course Code"
-                  error={errors.courseCode}
-                />
-              </div>
-
               {/* Course Name */}
               <div>
                 <label className="block mb-1 font-medium">Course Name</label>
@@ -252,21 +338,88 @@ const CourseForm = () => {
               {/* Course Type */}
               <div>
                 <label className="block mb-1 font-medium">Course Type</label>
-                <Select {...register('courseType', { required: 'Course Type is required' })} error={errors.courseType}>
+                <Select
+                  {...register('courseType', { required: 'Course Type is required' })}
+                  error={errors.courseType}
+                >
                   <option value="">Select Course Type</option>
-                  <option value="Core">Core</option>
-                  <option value="Elective">Elective</option>
-                  {/* Add more options as needed */}
+                  {courseTypeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </Select>
               </div>
 
-              {/* Department */}
+              {/* Department Responsible for Course Delivery */}
               <div>
-                <label className="block mb-1 font-medium">Department Responsible for Course Delivery</label>
-                <Input
+                <label className="block mb-1 font-medium">
+                  Department Responsible for Course Delivery
+                </label>
+                <Select
                   {...register('department', { required: 'Department is required' })}
-                  placeholder="Department (e.g., Computer Science)"
                   error={errors.department}
+                >
+                  <option value="">Select Department</option>
+                  {departmentOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              {/* Nature of Course */}
+              <div>
+                <label className="block mb-1 font-medium">Nature of Course</label>
+                <Select
+                  {...register('natureOfCourse', { required: 'Nature of Course is required' })}
+                  error={errors.natureOfCourse}
+                >
+                  <option value="">Select Nature of Course</option>
+                  {natureOfCourseOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              {/* Level of the Course */}
+              <div>
+                <label className="block mb-1 font-medium flex items-center">
+                  Level of the Course
+                  <Tooltip
+                    content={`100 – 400 level courses: Core and elective courses for UG programmes.
+500 level courses: Courses for M.Sc. programmes.
+600 level courses: Preparatory/introductory courses for M.Tech. and advanced courses for M.Sc. programmes.
+700 - 800 level courses: Core and elective courses for M.Tech., M.Des., M.B.A., M.S.(Research) and Ph.D. programmes.`}
+                  >
+                    <span className="ml-2 text-gray-500 cursor-pointer">
+                      <InfoIcon />
+                    </span>
+                  </Tooltip>
+                </label>
+                <Input
+                  type="number"
+                  {...register('levelOfCourse', {
+                    required: 'Level of the Course is required',
+                    min: { value: 100, message: 'Minimum level is 100' },
+                    max: { value: 800, message: 'Maximum level is 800' },
+                  })}
+                  placeholder="Level of the Course (e.g., 500)"
+                  error={errors.levelOfCourse}
+                />
+              </div>
+
+              {/* Generated Course Code */}
+              <div>
+                <label className="block mb-1 font-medium">Generated Course Code</label>
+                <Input
+                  {...register('courseCode')}
+                  readOnly
+                  placeholder="Course Code"
+                  className="bg-gray-100"
                 />
               </div>
 
@@ -320,7 +473,9 @@ const CourseForm = () => {
                   <Input
                     type="number"
                     step="0.1"
-                    {...register('creditStructure.lab', { required: 'Lab hours are required' })}
+                    {...register('creditStructure.lab', {
+                      required: 'Lab hours are required',
+                    })}
                     placeholder="Lab Hours (e.g., 2)"
                     error={errors.creditStructure?.lab}
                   />
@@ -334,7 +489,9 @@ const CourseForm = () => {
               {preReqFields.map((field, index) => (
                 <div key={field.id} className="flex items-center mb-2">
                   <Input
-                    {...register(`preRequisites.${index}`, { required: 'Pre-requisite is required' })}
+                    {...register(`preRequisites.${index}`, {
+                      required: 'Pre-requisite is required',
+                    })}
                     placeholder={`Pre-requisite ${index + 1} (e.g., COL100)`}
                     className="flex-1"
                     error={errors.preRequisites?.[index]}
@@ -352,7 +509,12 @@ const CourseForm = () => {
                   />
                 </div>
               ))}
-              <Button type="button" onClick={() => appendPreReq('')} variant="secondary" className="mt-2">
+              <Button
+                type="button"
+                onClick={() => appendPreReq('')}
+                variant="secondary"
+                className="mt-2"
+              >
                 Add Pre-requisite
               </Button>
             </div>

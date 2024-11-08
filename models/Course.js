@@ -34,6 +34,7 @@ const CourseSchema = new mongoose.Schema(
     assessments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Assessment' }], // Array of Assessment references
     clOs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'CLO' }], // Array of CLO references
     clOsToPloMappings: [{ type: mongoose.Schema.Types.ObjectId, ref: 'CLOtoPLO' }], // Array of CLOtoPLO references
+    status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' },
     // Add other nested fields as needed
   },
   { timestamps: true }

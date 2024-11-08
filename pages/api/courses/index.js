@@ -1,9 +1,9 @@
 // pages/api/courses/index.js
+
 import dbConnect from '../../../lib/mongodb';
 import { authenticate } from '../../../lib/auth';
 import Course from '../../../models/Course';
 import CLO from '../../../models/CLO';
-// import PLO from '../../../models/PLO';
 import CCDP from '../../../models/CCDP';
 import Assessment from '../../../models/Assessment';
 import CLOtoPLO from '../../../models/CLOtoPLO';
@@ -16,170 +16,166 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     try {
       // Authenticate the request
-      await authenticate(req, res, async () => {
-        const data = req.body;
+      await authenticate(req, res);
 
-        // Debugging: Log the received data
-        console.log('Received Course Data:', data);
+      const data = req.body;
 
-        // Validate required fields
-        if (!data.ccdp || !Array.isArray(data.ccdp) || data.ccdp.length === 0) {
-          return res.status(400).json({ message: 'At least one CCDP entry is required' });
-        }
+      // Check if the course code already exists
+      const existingCourse = await Course.findOne({ courseCode: data.courseCode });
+      if (existingCourse) {
+        return res.status(400).json({ message: 'Course code already exists' });
+      }
 
-        if (!data.assessments || !Array.isArray(data.assessments) || data.assessments.length === 0) {
-          return res.status(400).json({ message: 'At least one assessment is required' });
-        }
+      // Validate required fields
+      if (!data.ccdp || !Array.isArray(data.ccdp) || data.ccdp.length === 0) {
+        return res.status(400).json({ message: 'At least one CCDP entry is required' });
+      }
 
-        if (!data.clOs || !Array.isArray(data.clOs) || data.clOs.length === 0) {
-          return res.status(400).json({ message: 'At least one CLO is required' });
-        }
+      if (!data.assessments || !Array.isArray(data.assessments) || data.assessments.length === 0) {
+        return res.status(400).json({ message: 'At least one assessment is required' });
+      }
 
-        // Handle Course Resources
-        const courseResources = Array.isArray(data.courseResources)
-          ? data.courseResources.map(item => item.trim()).filter(item => item)
-          : [];
+      if (!data.clOs || !Array.isArray(data.clOs) || data.clOs.length === 0) {
+        return res.status(400).json({ message: 'At least one CLO is required' });
+      }
 
-        // Create Assessment Strategy if provided
-        let assessmentStrategy = null;
-        if (data.assessmentStrategy && data.assessmentStrategy.description) {
-          assessmentStrategy = await AssessmentStrategy.create({
-            description: data.assessmentStrategy.description,
-          });
-        }
+      // Handle Course Resources
+      const courseResources = Array.isArray(data.courseResources)
+        ? data.courseResources.map(item => item.trim()).filter(item => item)
+        : [];
 
-        // Create Teaching and Learning Methods
-        const teachingMethods = await Promise.all(
-          data.teachingAndLearningMethods.map(async (method) => {
-            return await TeachingMethodology.create({
-              clo: method.clo,
-              methodology: method.methodology,
-            });
-          })
-        );
-
-        // Create CCDP Entries
-        const ccdpEntries = await Promise.all(
-          data.ccdp.map(async (ccdpData) => {
-            return await CCDP.create({
-              clo: ccdpData.clo,
-              lessonNo: parseInt(ccdpData.lessonNo, 10),
-              topics: ccdpData.topics,
-              hours: parseFloat(ccdpData.hours),
-            });
-          })
-        );
-
-        // Create Assessments
-        const assessments = await Promise.all(
-          data.assessments.map(async (assessmentData) => {
-            return await Assessment.create({
-              clo: assessmentData.clo,
-              assessmentType: assessmentData.assessmentType,
-              assessmentMethod: assessmentData.assessmentMethod,
-              assessmentDescription: assessmentData.assessmentDescription,
-              weight: parseFloat(assessmentData.weight),
-            });
-          })
-        );
-
-        // Consolidate Course Delivery Methodologies
-        let courseDeliveryMethodologies = [];
-        if (Array.isArray(data.courseDeliveryMethodologies)) {
-          courseDeliveryMethodologies = data.courseDeliveryMethodologies.map(item => ({
-            method: item.method.trim(),
-            percentage: parseFloat(item.percentage),
-          })).filter(item => item.method && !isNaN(item.percentage));
-        }
-
-        // Create the Course first to obtain its _id
-        const course = await Course.create({
-          courseCode: data.courseCode,
-          courseName: data.courseName,
-          courseType: data.courseType,
-          department: data.department,
-          hoursTotal: parseFloat(data.hoursTotal),
-          creditStructure: {
-            lecture: parseFloat(data.creditStructure.lecture),
-            tutorial: parseFloat(data.creditStructure.tutorial),
-            lab: parseFloat(data.creditStructure.lab),
-          },
-          preRequisites: Array.isArray(data.preRequisites)
-            ? data.preRequisites.filter(prereq => prereq.trim() !== '')
-            : [],
-          courseDescription: {
-            courseContents: data.courseDescription.courseContents,
-            targetAudience: data.courseDescription.targetAudience,
-            industryRelevance: data.courseDescription.industryRelevance,
-          },
-          courseResources: courseResources,
-          teachingAndLearningMethods: teachingMethods.map((method) => method._id),
-          assessmentStrategy: assessmentStrategy ? assessmentStrategy._id : null,
-          ccdp: ccdpEntries.map((entry) => entry._id),
-          assessments: assessments.map((assessment) => assessment._id),
-          clOs: [], // To be updated after creating CLOs
-          clOsToPloMappings: [], // To be updated after creating CLOtoPLO mappings
-          courseDeliveryMethodologies: courseDeliveryMethodologies, // Embedded Subdocuments
+      // Create Assessment Strategy if provided
+      let assessmentStrategy = null;
+      if (data.assessmentStrategy && data.assessmentStrategy.description) {
+        assessmentStrategy = await AssessmentStrategy.create({
+          description: data.assessmentStrategy.description,
         });
+      }
 
-        // Log the created course
-        console.log('Created Course:', course);
+      // Create Teaching and Learning Methods
+      const teachingMethods = await Promise.all(
+        data.teachingAndLearningMethods.map(async (method) => {
+          return await TeachingMethodology.create({
+            clo: method.clo,
+            methodology: method.methodology,
+          });
+        })
+      );
 
-        // Create CLOs with 'course' field set to course._id
-        const clOs = await Promise.all(
-          data.clOs.map(async (cloData) => {
-            const clo = await CLO.create({
-              description: cloData.description,
-              course: course._id, // Associate CLO with the Course
-            });
-            return clo;
-          })
-        );
+      // Create CCDP Entries
+      const ccdpEntries = await Promise.all(
+        data.ccdp.map(async (ccdpData) => {
+          return await CCDP.create({
+            clo: ccdpData.clo,
+            lessonNo: parseInt(ccdpData.lessonNo, 10),
+            topics: ccdpData.topics,
+            hours: parseFloat(ccdpData.hours),
+          });
+        })
+      );
 
-        // Log the created CLOs
-        console.log('Created CLOs:', clOs);
+      // Create Assessments
+      const assessments = await Promise.all(
+        data.assessments.map(async (assessmentData) => {
+          return await Assessment.create({
+            clo: assessmentData.clo,
+            assessmentType: assessmentData.assessmentType,
+            assessmentMethod: assessmentData.assessmentMethod,
+            assessmentDescription: assessmentData.assessmentDescription,
+            weight: parseFloat(assessmentData.weight),
+          });
+        })
+      );
 
-        // Create CLO to PLO Mappings
-        const clOsToPloMappings = await Promise.all(
-          data.clOs.map(async (cloData, index) => {
-            if (cloData.plo && Array.isArray(cloData.plo)) {
-              const mapping = await CLOtoPLO.create({
-                clo: clOs[index]._id, // Use the actual CLO ObjectId
-                plo: cloData.plo,
-              });
-              return mapping;
-            }
-            return null;
-          })
-        ).then((mappings) => mappings.filter((mapping) => mapping !== null));
+      // Consolidate Course Delivery Methodologies
+      let courseDeliveryMethodologies = [];
+      if (Array.isArray(data.courseDeliveryMethodologies)) {
+        courseDeliveryMethodologies = data.courseDeliveryMethodologies.map(item => ({
+          method: item.method.trim(),
+          percentage: parseFloat(item.percentage),
+        })).filter(item => item.method && !isNaN(item.percentage));
+      }
 
-        // Log the created CLOtoPLO Mappings
-        console.log('Created CLOtoPlo Mappings:', clOsToPloMappings);
-
-        // Update the Course with CLOs and CLOtoPlo Mappings
-        course.clOs = clOs.map((clo) => clo._id);
-        course.clOsToPloMappings = clOsToPloMappings.map((mapping) => mapping._id);
-
-        // Save the updated Course
-        await course.save();
-
-        // Populate necessary fields before sending the response
-        const populatedCourse = await Course.findById(course._id)
-          .populate('teachingAndLearningMethods')
-          .populate('clOs')
-          .populate('clOsToPloMappings')
-          .populate('assessments') // Populate assessments
-          .populate('ccdp') // Populate ccdp
-          .populate('assessmentStrategy') // Populate assessmentStrategy
-          .lean() // Converts Mongoose document to plain JS object
-          .exec();
-
-        // Respond with the populated course
-        res.status(201).json({ message: 'Course created successfully', data: populatedCourse });
+      // Create the Course first to obtain its _id
+      const course = await Course.create({
+        courseCode: data.courseCode,
+        courseName: data.courseName,
+        courseType: data.courseType, // Ensure this line is present
+        department: data.department,
+        hoursTotal: parseFloat(data.hoursTotal),
+        creditStructure: {
+          lecture: parseFloat(data.creditStructure.lecture),
+          tutorial: parseFloat(data.creditStructure.tutorial),
+          lab: parseFloat(data.creditStructure.lab),
+        },
+        preRequisites: Array.isArray(data.preRequisites)
+          ? data.preRequisites.filter(prereq => prereq.trim() !== '')
+          : [],
+        courseDescription: {
+          courseContents: data.courseDescription.courseContents,
+          targetAudience: data.courseDescription.targetAudience,
+          industryRelevance: data.courseDescription.industryRelevance,
+        },
+        courseResources: courseResources,
+        teachingAndLearningMethods: teachingMethods.map((method) => method._id),
+        assessmentStrategy: assessmentStrategy ? assessmentStrategy._id : null,
+        ccdp: ccdpEntries.map((entry) => entry._id),
+        assessments: assessments.map((assessment) => assessment._id),
+        clOs: [], // To be updated after creating CLOs
+        clOsToPloMappings: [], // To be updated after creating CLOtoPLO mappings
+        courseDeliveryMethodologies: courseDeliveryMethodologies, // Embedded Subdocuments
+        status: 'pending', // Default status
       });
+
+      // Create CLOs with 'course' field set to course._id
+      const clOs = await Promise.all(
+        data.clOs.map(async (cloData) => {
+          const clo = await CLO.create({
+            description: cloData.description,
+            course: course._id, // Associate CLO with the Course
+          });
+          return clo;
+        })
+      );
+
+      // Create CLO to PLO Mappings
+      const clOsToPloMappings = await Promise.all(
+        data.clOs.map(async (cloData, index) => {
+          if (cloData.plo && Array.isArray(cloData.plo)) {
+            const mapping = await CLOtoPLO.create({
+              clo: clOs[index]._id, // Use the actual CLO ObjectId
+              plo: cloData.plo,
+            });
+            return mapping;
+          }
+          return null;
+        })
+      ).then((mappings) => mappings.filter((mapping) => mapping !== null));
+
+      // Update the Course with CLOs and CLOtoPlo Mappings
+      course.clOs = clOs.map((clo) => clo._id);
+      course.clOsToPloMappings = clOsToPloMappings.map((mapping) => mapping._id);
+
+      // Save the updated Course
+      await course.save();
+
+      // Populate necessary fields before sending the response
+      const populatedCourse = await Course.findById(course._id)
+        .populate('teachingAndLearningMethods')
+        .populate('clOs')
+        .populate('clOsToPloMappings')
+        .populate('assessments')
+        .populate('ccdp')
+        .populate('assessmentStrategy')
+        .lean()
+        .exec();
+
+      // Respond with the populated course
+      res.status(201).json({ message: 'Course created successfully', data: populatedCourse });
+
     } catch (error) {
       console.error('Course Submission Error:', error);
-      // Check if headers are already sent to prevent "Cannot set headers after they are sent to the client" errors
+      // Send error response
       if (!res.headersSent) {
         res.status(500).json({ message: 'Server error', error: error.message });
       }

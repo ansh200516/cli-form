@@ -1,4 +1,5 @@
 // pages/api/auth/register.js
+
 import dbConnect from '../../../lib/mongodb';
 import User from '../../../models/User';
 import bcrypt from 'bcryptjs';
@@ -8,7 +9,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  const { kerberosId, password } = req.body;
+  const { kerberosId, password, isAdmin } = req.body; // Include isAdmin
 
   if (!kerberosId || !password) {
     return res.status(400).json({ message: 'Kerberos ID and password are required' });
@@ -27,6 +28,7 @@ export default async function handler(req, res) {
     await User.create({
       kerberosId,
       password: hashedPassword, // Save the hashed password
+      isAdmin: isAdmin || false, // Set isAdmin based on input, default to false
     });
 
     res.status(201).json({ message: 'User registered successfully' });
